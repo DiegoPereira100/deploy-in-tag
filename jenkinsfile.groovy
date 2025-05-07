@@ -31,7 +31,7 @@ pipeline {
         stage('Build') {
             steps {
                 echo "🛠️ Executando build padrão..."
-                bat 'mvn clean package'
+                bat 'npm install'
             }
         }
 
