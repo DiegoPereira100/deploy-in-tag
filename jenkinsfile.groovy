@@ -2,23 +2,25 @@ pipeline {
     agent any
 
     stages {
-        stage('Clone Repositório') {
+        stage('Preparação') {
             steps {
                 checkout scm
+                bat 'git config --global --add safe.directory %WORKSPACE%'  // Corrige possível erro de permissão
             }
         }
 
         stage('Verificar Tag') {
             steps {
                 script {
+                    // Método mais confiável para verificar tags
                     bat 'git fetch --tags --force'
-                    
+                    def commitId = bat(script: '@git rev-parse HEAD', returnStdout: true).trim()
                     def tags = bat(
-                        script: '@git tag --points-at HEAD 2>nul || echo ""',
+                        script: "@git tag --points-at %commitId% 2>nul || echo \"\"",
                         returnStdout: true
                     ).trim().split('\r\n')
-                    
-                    if (tags.size() > 0 && tags[0] != '') {
+
+                    if (tags && tags[0]) {
                         echo "✅ Build disparado pela TAG: ${tags[0]}"
                         env.IS_TAG = "true"
                         env.TAG_NAME = tags[0]
@@ -28,51 +30,53 @@ pipeline {
                     }
                 }
             }
-          }  
+        }
 
         stage('Build') {
             steps {
-                echo "🛠️ Executando build padrão..."
-                bat 'gradle build'
+                script {
+                    try {
+                        echo "🛠️ Executando build padrão..."
+                        bat 'call gradlew.bat build'  // Usando o wrapper do Gradle
+                    } catch (e) {
+                        error "❌ Falha no build: ${e.message}"
+                    }
+                }
             }
         }
 
-        stage('Build de Release') {
-            when { 
-                expression { 
-                    return env.IS_TAG == "true" && env.TAG_NAME ==~ /v\d+\.\d+\.\d+/ 
-                } 
-            }
-            steps {
-                echo "🚀 Build de Release para TAG: ${env.TAG_NAME}"
-                bat 'echo "Simulando deploy da versão ${env.TAG_NAME}"'
-            }
-        }
-
-        stage('Deploy em Produção') {
+        stage('Release') {
             when { 
                 expression { 
                     return env.IS_TAG == "true" 
                 } 
             }
             steps {
-                echo "🚀 Deploy da versão ${env.TAG_NAME} em produção..."
+                echo "🚀 Preparando release ${env.TAG_NAME}"
+                bat """
+                    echo Versão: %TAG_NAME% > version.txt
+                    7z a build-${env.TAG_NAME}.zip build\\libs\\* version.txt
+                """
             }
         }
     }
 
     post {
+        always {
+            echo "📌 Status final: ${currentBuild.currentResult}"
+        }
         success {
             script {
                 if (env.IS_TAG == "true") {
-                    echo "✅ Release ${env.TAG_NAME} publicada com sucesso!"
+                    echo "✅ Release ${env.TAG_NAME} concluída!"
+                    archiveArtifacts artifacts: "build-${env.TAG_NAME}.zip"
                 } else {
                     echo "✅ Build padrão concluído!"
                 }
             }
         }
         failure {
-            echo "❌ Falha no pipeline!"
+            echo "❌ Pipeline falhou no estágio: ${currentBuild.result}"
         }
     }
 }
