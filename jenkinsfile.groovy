@@ -33,7 +33,7 @@ pipeline {
         stage('Build') {
             steps {
                 echo "🛠️ Executando build padrão..."
-                bat 'npm install'
+                bat 'gradle build'
             }
         }
 
