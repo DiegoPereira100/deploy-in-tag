@@ -11,7 +11,7 @@ pipeline {
         stage('Verificar Tag') {
             steps {
                 script {
-                    def tag = sh(
+                    def tag = bat(
                         script: 'git describe --exact-match --tags HEAD 2>/dev/null || echo ""',
                         returnStdout: true
                     ).trim()
@@ -31,7 +31,7 @@ pipeline {
         stage('Build') {
             steps {
                 echo "🛠️ Executando build padrão..."
-                sh 'mvn clean package'
+                bat 'mvn clean package'
             }
         }
 
@@ -39,7 +39,7 @@ pipeline {
             when { expression { env.IS_TAG == 'true' } }
             steps {
                 echo "🚀 Build de Release para TAG: ${env.TAG_NAME}"
-                sh 'mvn clean deploy -DskipTests'
+                bat 'mvn clean deploy -DskipTests'
             }
         }
 
